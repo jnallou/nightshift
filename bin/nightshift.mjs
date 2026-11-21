@@ -38,8 +38,8 @@ try {
       ["Claude Code is installed", run(env.NIGHTSHIFT_CLAUDE_BIN || "claude", ["--version"]).code === 0, "npm install -g @anthropic-ai/claude-code"],
       ["GitHub CLI is signed in", run("gh", ["auth", "status"], { cwd: repo }).code === 0, "gh auth login"],
       ["A reviewer is set", !!cfg.reviewer, "set reviewer in .nightshift/config.json"],
-      ["The App Store id is set", !!cfg.app.appStoreId, "set app.appStoreId in .nightshift/config.json"],
     ];
+    if (s.appStoreReviews.enabled || s.appStoreConnect.enabled) rows.push(["The App Store id is set", !!cfg.app.appStoreId, "set app.appStoreId in .nightshift/config.json"]);
     if (env.CI) rows.push(["A Claude credential is present", !!(env.ANTHROPIC_API_KEY || env.CLAUDE_CODE_OAUTH_TOKEN), "add the CLAUDE_CODE_OAUTH_TOKEN or ANTHROPIC_API_KEY secret"]);
     if (s.appStoreConnect.enabled) rows.push(["App Store Connect keys are present", !!(env.ASC_KEY_ID && env.ASC_ISSUER_ID && env.ASC_PRIVATE_KEY), "add ASC_KEY_ID, ASC_ISSUER_ID and ASC_PRIVATE_KEY"]);
     if (s.sentry.enabled) rows.push(["Sentry is configured", !!(env.SENTRY_AUTH_TOKEN && s.sentry.org && s.sentry.project), "add SENTRY_AUTH_TOKEN and fill in sources.sentry"]);

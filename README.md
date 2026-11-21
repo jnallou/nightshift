@@ -21,7 +21,7 @@ In your app's repository:
 npx github:jnallou/nightshift init
 ```
 
-It looks at your project, works out the stack, finds your app on the App Store from the bundle id, and writes three things: `.nightshift/` (settings, plus its own code so you can read and change all of it), a GitHub Actions workflow, and one line in `.gitignore`. Then it prints the last three steps, which take about two minutes:
+It looks at your project and works out the stack. For an iOS app it finds the App Store listing from the bundle id. For a web app or a server it uses the project's own check and test scripts. Then it writes three things: `.nightshift/` (settings, plus its own code so you can read and change all of it), a GitHub Actions workflow, and one line in `.gitignore`. Then it prints the last three steps, which take about two minutes:
 
 1. Give it a Claude credential as a repository secret (`CLAUDE_CODE_OAUTH_TOKEN` from `claude setup-token`, or `ANTHROPIC_API_KEY`).
 2. Allow GitHub Actions to open pull requests.

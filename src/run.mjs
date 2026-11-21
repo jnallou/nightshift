@@ -28,6 +28,12 @@ export async function runNightshift({ repo, dryRun = false, env = process.env, f
   git(["fetch", "origin", cfg.baseBranch], { timeout: 180_000 });
   const baseRef = git(["rev-parse", "--verify", "--quiet", `origin/${cfg.baseBranch}`]).code === 0 ? `origin/${cfg.baseBranch}` : cfg.baseBranch;
 
+  // Setup comes first: a source may be one of the project's own commands, which needs its dependencies.
+  for (const cmd of cfg.setup) {
+    const r = shell(cmd, { cwd: repo, env: cleanEnv(env), timeout: 15 * 60_000 });
+    if (r.code !== 0) report.problems.push(`Setup command \`${cmd}\` failed: ${clip(r.stderr.trim() || r.stdout.trim(), 300)}`);
+  }
+
   // 1. Listen.
   const { signals, counts, warnings } = await collectAll(cfg, { repo, env, fetch });
   report.counts = counts;
@@ -49,11 +55,6 @@ export async function runNightshift({ repo, dryRun = false, env = process.env, f
   const notes = existsSync(notesFile) ? clip(readFileSync(notesFile, "utf8"), 6000) : "";
   const memory = lessons(history.items);
   const byId = new Map(fresh.map((s) => [s.id, s]));
-
-  for (const cmd of cfg.setup) {
-    const r = shell(cmd, { cwd: repo, env: cleanEnv(env), timeout: 15 * 60_000 });
-    if (r.code !== 0) report.problems.push(`Setup command \`${cmd}\` failed: ${clip(r.stderr.trim() || r.stdout.trim(), 300)}`);
-  }
 
   // 3. Think.
   const triage = askClaude({ cwd: repo, cfg, env, schema: TRIAGE_SCHEMA, tools: READ_TOOLS, allowed: READ_TOOLS, prompt: triagePrompt({ cfg, signals: fresh, openWork: openWork(history.items), lessons: memory, notes }) });

@@ -7,7 +7,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, chmodS
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runNightshift } from "../src/run.mjs";
-import { init, detect } from "../src/init.mjs";
+import { init, detect, nextSteps } from "../src/init.mjs";
 import { marker } from "../src/history.mjs";
 import { signal } from "../src/signals.mjs";
 import { run } from "../src/util.mjs";
@@ -209,6 +209,13 @@ test("a dry run pushes nothing and opens nothing; a model failure is a problem, 
   assert.ok(!w2.gh().some((c) => c.a[0] !== "label" && c.a[1] === "create"));
 });
 
+test("setup runs before sources are read, so a source can be one of the project's own commands", async () => {
+  const w = world({ plan: { triage: { items: [] }, fixes: [] }, config: { setup: ["touch .deps-installed"], sources: { appStoreReviews: { enabled: false }, inbox: { enabled: false }, githubIssues: { enabled: false }, commands: [{ name: "self-check", run: "test -f .deps-installed || echo 'dependencies are missing'" }] } }, files: { ".gitignore": ".deps-installed\n" } });
+  const r = await w.shift();
+  assert.equal(r.counts.Commands, 0, "the command saw the installed dependencies and stayed quiet");
+  assert.match(r.headline, /Quiet night/);
+});
+
 test("it refuses to run on a dirty checkout", async () => {
   const w = world({ plan: { triage: TRIAGE, fixes: [] } });
   writeFileSync(join(w.repo, "wip.txt"), "mine");
@@ -235,5 +242,14 @@ test("init reads the project and installs a working copy of itself", async () =>
   writeFileSync(join(expo, "package.json"), JSON.stringify({ dependencies: { expo: "1" }, scripts: { test: "jest", lint: "eslint ." } }));
   writeFileSync(join(expo, "package-lock.json"), "{}"); writeFileSync(join(expo, "tsconfig.json"), "{}");
   writeFileSync(join(expo, "app.json"), JSON.stringify({ expo: { ios: { bundleIdentifier: "com.demo.rn" } } }));
-  assert.deepEqual(detect(expo), { stack: "expo", setup: ["npm ci"], checks: ["npx tsc --noEmit", "npm run lint", "npm test"], bundleId: "com.demo.rn", note: "" });
+  assert.deepEqual(detect(expo), { stack: "expo", mobile: true, setup: ["npm ci"], checks: ["npx tsc --noEmit", "npm run lint", "npm test"], bundleId: "com.demo.rn", note: "" });
+
+  // A plain web app: no App Store source, and its own check script is picked up.
+  const web = mkdtempSync(join(tmpdir(), "nightshift-web-"));
+  run("git", ["init", "-q", "-b", "main", web], { check: true });
+  writeFileSync(join(web, "package.json"), JSON.stringify({ dependencies: { next: "1" }, scripts: { check: "node check.js", build: "next build" } }));
+  writeFileSync(join(web, "package-lock.json"), "{}");
+  const site = await init({ repo: web, reviewer: "sam", fetch });
+  assert.deepEqual({ stack: site.detected.stack, setup: site.cfg.setup, checks: site.cfg.checks, store: site.cfg.sources.appStoreReviews.enabled }, { stack: "node", setup: ["npm ci"], checks: ["npm run check"], store: false });
+  assert.ok(!nextSteps(site).includes("App Store"));
 });

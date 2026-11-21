@@ -26,16 +26,24 @@ export function detect(repo) {
   const pkg = json(join(repo, "package.json"));
   const deps = { ...(pkg?.dependencies || {}), ...(pkg?.devDependencies || {}) };
   const xcode = find(repo, (n) => n.endsWith(".xcodeproj"));
-  const d = { stack: "unknown", setup: [], checks: [], bundleId: "", note: "" };
+  const d = { stack: "unknown", mobile: true, setup: [], checks: [], bundleId: "", note: "" };
+  const node = () => {
+    d.setup = [existsSync(join(repo, "pnpm-lock.yaml")) ? "corepack enable && pnpm install --frozen-lockfile" : existsSync(join(repo, "yarn.lock")) ? "yarn install --frozen-lockfile" : existsSync(join(repo, "package-lock.json")) ? "npm ci" : "npm install"];
+    if (existsSync(join(repo, "tsconfig.json"))) d.checks.push("npx tsc --noEmit");
+    for (const name of ["lint", "check"]) if (pkg.scripts?.[name]) d.checks.push(`npm run ${name}`);
+    if (pkg.scripts?.test && !/no test specified/.test(pkg.scripts.test)) d.checks.push("npm test");
+  };
 
   if (deps.expo || deps["react-native"]) {
     d.stack = deps.expo ? "expo" : "react-native";
-    d.setup = [existsSync(join(repo, "pnpm-lock.yaml")) ? "corepack enable && pnpm install --frozen-lockfile" : existsSync(join(repo, "yarn.lock")) ? "yarn install --frozen-lockfile" : existsSync(join(repo, "package-lock.json")) ? "npm ci" : "npm install"];
-    if (existsSync(join(repo, "tsconfig.json"))) d.checks.push("npx tsc --noEmit");
-    if (pkg.scripts?.lint) d.checks.push("npm run lint");
-    if (pkg.scripts?.test && !/no test specified/.test(pkg.scripts.test)) d.checks.push("npm test");
+    node();
     const app = json(join(repo, "app.json"));
     d.bundleId = app?.expo?.ios?.bundleIdentifier || "";
+  } else if (pkg && !xcode.length && !existsSync(join(repo, "pubspec.yaml"))) {
+    // A web app or a server: no App Store to listen to.
+    d.stack = "node";
+    d.mobile = false;
+    node();
   } else if (existsSync(join(repo, "pubspec.yaml"))) {
     d.stack = "flutter";
     d.note = "Flutter needs the Flutter SDK on the runner. Add a setup step to the workflow, then set checks to [\"flutter analyze\", \"flutter test\"].";
@@ -83,7 +91,7 @@ export async function init({ repo, reviewer, appId, force = false, fetch = globa
     setup: d.setup,
     checks: d.checks,
     sources: {
-      appStoreReviews: { enabled: true },
+      appStoreReviews: { enabled: d.mobile },
       appStoreConnect: { enabled: false },
       sentry: { enabled: false, org: "", project: "" },
       githubIssues: { enabled: true, labels: ["bug", "feedback"] },
@@ -113,7 +121,7 @@ export async function init({ repo, reviewer, appId, force = false, fetch = globa
 export function nextSteps({ cfg, detected }) {
   const found = [
     `Stack: ${detected.stack}`,
-    `App: ${cfg.app.name ? `${cfg.app.name} (App Store id ${cfg.app.appStoreId})` : "not found on the App Store yet. Set app.appStoreId in .nightshift/config.json"}`,
+    ...(detected.mobile ? [`App: ${cfg.app.name ? `${cfg.app.name} (App Store id ${cfg.app.appStoreId})` : "not found on the App Store yet. Set app.appStoreId in .nightshift/config.json"}`] : []),
     `Reviewer: ${cfg.reviewer ? "@" + cfg.reviewer : "not set. Put your GitHub username in .nightshift/config.json"}`,
     `Base branch: ${cfg.baseBranch}`,
     `Checks: ${cfg.checks.length ? cfg.checks.join(", ") : "none"}`,
