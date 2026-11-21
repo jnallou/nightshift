@@ -1,0 +1,52 @@
+name: Nightshift
+
+# Clocks in every night, and whenever you press "Run workflow".
+on:
+  schedule:
+    - cron: "23 9 * * *" # 09:23 UTC, before the US morning
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Look and think, but push nothing"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: nightshift
+  cancel-in-progress: false
+
+jobs:
+  shift:
+    runs-on: ubuntu-latest # use macos-latest if your checks need Xcode
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false # the agent runs your code, so no token is left on disk
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Run the shift
+        run: node .nightshift/engine/bin/nightshift.mjs run ${{ inputs.dry_run && '--dry-run' || '' }}
+        env:
+          # NIGHTSHIFT_GH_TOKEN is optional. Pull requests opened with the built-in token
+          # do not start your other workflows. Add a personal token if you want your CI to run on them.
+          GH_TOKEN: ${{ secrets.NIGHTSHIFT_GH_TOKEN || github.token }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Only needed for the sources you switch on in .nightshift/config.json
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}

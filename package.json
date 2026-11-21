@@ -1,0 +1,10 @@
+{
+  "name": "nightshift",
+  "version": "0.1.0",
+  "description": "A feedback loop agent for your app. It reads what users hit, finds the cause in your code, and opens pull requests for you to review.",
+  "type": "module",
+  "bin": { "nightshift": "bin/nightshift.mjs" },
+  "scripts": { "test": "node --test" },
+  "engines": { "node": ">=20" },
+  "license": "MIT"
+}
